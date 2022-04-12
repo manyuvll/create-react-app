@@ -28,6 +28,8 @@ const paths = require('./paths');
 const modules = require('./modules');
 const getClientEnvironment = require('./env');
 const ModuleNotFoundPlugin = require('react-dev-utils/ModuleNotFoundPlugin');
+const MomentLocalesPlugin = require('moment-locales-webpack-plugin');
+const SpeedMeasurePlugin = require('speed-measure-webpack-plugin');
 const ForkTsCheckerWebpackPlugin =
   process.env.TSC_COMPILE_ON_ERROR === 'true'
     ? require('react-dev-utils/ForkTsCheckerWarningWebpackPlugin')
@@ -37,6 +39,10 @@ const ReactRefreshWebpackPlugin = require('@pmmmwh/react-refresh-webpack-plugin'
 const getCacheIdentifier = require('react-dev-utils/getCacheIdentifier');
 // @remove-on-eject-end
 const createEnvironmentHash = require('./webpack/persistentCache/createEnvironmentHash');
+
+//measure speed
+const measureSpeed = process.env.MEASURE_SPEED === 'false';
+const smp = new SpeedMeasurePlugin();
 
 // Source maps are resource heavy and can cause out of memory issue for large source files.
 const shouldUseSourceMap = process.env.GENERATE_SOURCEMAP !== 'false';
@@ -60,6 +66,8 @@ const shouldInlineRuntimeChunk = process.env.INLINE_RUNTIME_CHUNK !== 'false';
 
 const emitErrorsAsWarnings = process.env.ESLINT_NO_DEV_ERRORS === 'true';
 const disableESLintPlugin = process.env.DISABLE_ESLINT_PLUGIN === 'true';
+const disableCaseSensitivePathsPlugin =
+  process.env.DISABLE_CASE_SENSITIVE_PATH_PLUGIN === 'true';
 
 const imageInlineSizeLimit = parseInt(
   process.env.IMAGE_INLINE_SIZE_LIMIT || '10000'
@@ -196,7 +204,7 @@ module.exports = function (webpackEnv) {
     return loaders;
   };
 
-  return {
+  var config = {
     target: ['browserslist'],
     // Webpack noise constrained to errors and warnings
     stats: 'errors-warnings',
@@ -661,7 +669,9 @@ module.exports = function (webpackEnv) {
       // Watcher doesn't work well if you mistype casing in a path so we use
       // a plugin that prints an error when you attempt to do this.
       // See https://github.com/facebook/create-react-app/issues/240
-      isEnvDevelopment && new CaseSensitivePathsPlugin(),
+      isEnvDevelopment &&
+        !disableCaseSensitivePathsPlugin &&
+        new CaseSensitivePathsPlugin(),
       isEnvProduction &&
         new MiniCssExtractPlugin({
           // Options similar to the same options in webpackOptions.output
@@ -693,15 +703,10 @@ module.exports = function (webpackEnv) {
           };
         },
       }),
-      // Moment.js is an extremely popular library that bundles large locale files
-      // by default due to how webpack interprets its code. This is a practical
-      // solution that requires the user to opt into importing specific locales.
-      // https://github.com/jmblog/how-to-optimize-momentjs-with-webpack
-      // You can remove this if you don't use Moment.js:
-      new webpack.IgnorePlugin({
-        resourceRegExp: /^\.\/locale$/,
-        contextRegExp: /moment$/,
-      }),
+
+      // Keep only english and Japanese
+      new MomentLocalesPlugin({ localesToKeep: ['es-us', 'ja'] }),
+
       // Generate a service worker script that will precache, and keep up to date,
       // the HTML & assets that are part of the webpack build.
       isEnvProduction &&
@@ -793,4 +798,5 @@ module.exports = function (webpackEnv) {
     // our own hints via the FileSizeReporter
     performance: false,
   };
+  return measureSpeed ? smp.wrap(config) : config;
 };
